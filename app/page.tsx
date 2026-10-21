@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { ShieldCheck } from 'lucide-react';
 type Verdict = 'Supported' | 'Contradicted' | 'Unverified';
 interface AnalysisResult {
   verdict: Verdict;
@@ -170,12 +171,12 @@ export default function TrustAIPage() {
       {/* Header */}
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 text-white font-bold">
-              T
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm">
+              <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-lg font-bold leading-tight">TrustAI</h1>
+              <h1 className="text-lg font-bold leading-tight text-slate-900">TrustAI</h1>
               <p className="text-xs text-slate-500">Misinformation tracker</p>
             </div>
           </div>
