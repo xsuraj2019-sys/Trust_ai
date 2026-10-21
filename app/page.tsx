@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-// ---------- Mock data ----------
 type Verdict = 'Supported' | 'Contradicted' | 'Unverified';
 interface AnalysisResult {
   verdict: Verdict;
@@ -9,89 +8,27 @@ interface AnalysisResult {
   sources: { title: string; url: string; outlet: string }[];
   nextSteps: string[];
 }
-const MOCK_ANALYSES: Record<string, AnalysisResult> = {
-  default: {
-    verdict: 'Unverified',
-    summary:
-      'We could not find this claim reported by any major credible news outlet. Treat with caution until verified.',
-    warningSigns: [
-      'No named source or author',
-      'Emotional / urgent language detected',
-      'Shared as a screenshot or forwarded message',
-    ],
-    sources: [
-      {
-        title: 'How to verify a viral claim in 5 minutes',
-        url: 'https://www.snopes.com/fact-check/',
-        outlet: 'Snopes',
-      },
-      {
-        title: 'Forwarded messages: the fact-checker’s checklist',
-        url: 'https://www.poynter.org/fact-checking/',
-        outlet: 'Poynter',
-      },
-      {
-        title: 'WhatsApp misinformation: what to look for',
-        url: 'https://fullfact.org/',
-        outlet: 'Full Fact',
-      },
-    ],
-    nextSteps: [
-      'Search the exact phrase in quotes on Google and see if any credible outlet has reported it.',
-      'Reverse image search any photos or screenshots included in the message.',
-      'Check the original source — is there a named person, outlet, or official document?',
-      'Wait at least 24 hours before forwarding; real news will still be real tomorrow.',
-    ],
-  },
-};
-// Keyword-based heuristics for the demo
-function analyzeText(text: string): AnalysisResult {
-  const lower = text.toLowerCase();
-  const warningSigns: string[] = [];
-  let verdict: Verdict = 'Unverified';
-  let summary =
-    'We could not confirm this claim against our mock database of credible sources.';
-  if (/(urgent|immediately|act now|before it.s too late|share now)/.test(lower)) {
-    warningSigns.push('Urgent / pressure language detected');
-  }
-  if (/(pay|payment|wire|transfer|bitcoin|gift card|bank details)/.test(lower)) {
-    warningSigns.push('Requests for payment or financial details');
-  }
-  if (/(forward|share with|send to 10|whatsapp group)/.test(lower)) {
-    warningSigns.push('Asks you to forward the message');
-  }
-  if (/(miracle|cure|doctors are hiding|they don.t want you to know)/.test(lower)) {
-    warningSigns.push('Sensational or conspiratorial framing');
-  }
-  if (/(breaking|shocking|exposed)/.test(lower)) {
-    warningSigns.push('Clickbait language ("breaking", "shocking", "exposed")');
-  }
-  if (/(100%|definitely|guaranteed|nobody is talking about)/.test(lower)) {
-    warningSigns.push('Absolute or exaggerated claims');
-  }
-  if (/(http|www\.|\.com|\.ly)/.test(lower) && /(bit\.ly|tinyurl|t\.co)/.test(lower)) {
-    warningSigns.push('Shortened / suspicious link');
-  }
-  if (warningSigns.length === 0) {
-    warningSigns.push('No obvious red flags — but source could not be verified');
-  }
-  // Toy verdict rules
-  if (/(vaccines? cause|miracle cure|cures? cancer|5g causes|drinking bleach)/.test(lower)) {
-    verdict = 'Contradicted';
-    summary =
-      'This claim contradicts established reporting from multiple credible health organizations and fact-checkers.';
-  } else if (/(covid-19 is caused by|world health organization announced|nasa confirmed|reuters reported)/.test(lower)) {
-    verdict = 'Supported';
-    summary =
-      'This claim matches reporting from recognized credible sources in our mock database.';
-  }
-  const base = MOCK_ANALYSES.default;
-  return {
-    ...base,
-    verdict,
-    summary,
-    warningSigns,
-  };
+
+function isAnalysisResult(value: unknown): value is AnalysisResult {
+  if (!value || typeof value !== 'object') return false;
+  const result = value as Record<string, unknown>;
+  return (
+    ['Supported', 'Contradicted', 'Unverified'].includes(String(result.verdict)) &&
+    typeof result.summary === 'string' &&
+    Array.isArray(result.warningSigns) &&
+    result.warningSigns.every((item) => typeof item === 'string') &&
+    Array.isArray(result.sources) &&
+    result.sources.every(
+      (source) =>
+        typeof source === 'object' &&
+        source !== null &&
+        typeof (source as Record<string, unknown>).title === 'string' &&
+        typeof (source as Record<string, unknown>).url === 'string' &&
+        typeof (source as Record<string, unknown>).outlet === 'string',
+    ) &&
+    Array.isArray(result.nextSteps) &&
+    result.nextSteps.every((item) => typeof item === 'string')
+  );
 }
 // ---------- Quiz data ----------
 interface QuizQuestion {
@@ -181,22 +118,47 @@ export default function TrustAIPage() {
   const [input, setInput] = useState('');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Quiz state
   const [answers, setAnswers] = useState<(number | null)[]>(Array(QUIZ.length).fill(null));
   const [submitted, setSubmitted] = useState(false);
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!input.trim()) return;
     setAnalyzing(true);
     setResult(null);
-    // Simulate analysis latency for the demo
-    setTimeout(() => {
-      setResult(analyzeText(input));
+    setError(null);
+
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !anonKey) {
+        throw new Error('The analysis service is not configured.');
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/analyze-claim`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${anonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: input.trim() }),
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok || !isAnalysisResult(payload)) {
+        throw new Error('The analysis service could not return a result.');
+      }
+      setResult(payload);
+    } catch (requestError) {
+      console.error('Claim analysis request failed', requestError);
+      setError('We could not analyze that message. Please try again.');
+    } finally {
       setAnalyzing(false);
-    }, 600);
+    }
   };
   const resetChecker = () => {
     setInput('');
     setResult(null);
+    setError(null);
   };
   const quizComplete = submitted && answers.every((a) => a !== null);
   const score = answers.reduce<number>(
@@ -245,7 +207,7 @@ export default function TrustAIPage() {
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs text-slate-400">
-                {input.length} characters · demo uses mock analysis
+                {input.length} characters · analyzed securely with Gemini
               </p>
               <div className="flex gap-2">
                 {result && (
@@ -266,6 +228,11 @@ export default function TrustAIPage() {
               </div>
             </div>
           </div>
+          {error && (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              {error}
+            </div>
+          )}
           {/* Results */}
           {analyzing && (
             <div className="mt-6 animate-pulse rounded-2xl border border-slate-200 bg-white p-6">
