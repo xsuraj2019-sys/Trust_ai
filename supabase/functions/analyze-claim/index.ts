@@ -28,24 +28,26 @@ const trustedSources = [
 ];
 
 const responseSchema = {
-  type: "OBJECT",
+  type: "object",
   properties: {
     verdict: {
-      type: "STRING",
+      type: "string",
       enum: ["Supported", "Contradicted", "Unverified"],
     },
-    summary: { type: "STRING" },
+    summary: { type: "string" },
     warningSigns: {
-      type: "ARRAY",
-      items: { type: "STRING" },
+      type: "array",
+      items: { type: "string" },
     },
     nextSteps: {
-      type: "ARRAY",
-      items: { type: "STRING" },
+      type: "array",
+      items: { type: "string" },
     },
   },
   required: ["verdict", "summary", "warningSigns", "nextSteps"],
 };
+
+const models = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash"];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -72,6 +74,60 @@ function isAnalysisResult(value: unknown): value is {
   );
 }
 
+async function callGemini(apiKey: string, prompt: string): Promise<{ ok: boolean; data?: unknown }> {
+  const requestBody = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema,
+    },
+  };
+
+  for (const model of models) {
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      model +
+      ":generateContent?key=" +
+      encodeURIComponent(apiKey);
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error(`Gemini ${model} failed`, response.status, errorBody);
+        if (response.status === 503 || response.status === 429 || response.status === 404) {
+          continue;
+        }
+        return { ok: false };
+      }
+
+      const body = await response.json();
+      const generatedText = body?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof generatedText !== "string") {
+        console.error(`Gemini ${model} returned empty result`);
+        continue;
+      }
+
+      const parsed = JSON.parse(generatedText);
+      if (isAnalysisResult(parsed)) {
+        return { ok: true, data: { ...parsed, sources: trustedSources } };
+      }
+
+      console.error(`Gemini ${model} returned invalid result`);
+    } catch (err) {
+      console.error(`Gemini ${model} threw`, err);
+    }
+  }
+
+  return { ok: false };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -94,41 +150,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const prompt = `You are a careful misinformation-literacy assistant. Analyze the submitted message for credibility signals. Do not invent sources, claim that you browsed the web, or present your assessment as proof of factual truth. Use Supported only when the wording itself clearly aligns with a well-established fact; use Contradicted only for a clearly false claim; otherwise use Unverified. Keep the summary under 55 words. Return 2 to 5 concrete warning signs and 3 to 4 practical next steps.\n\nMessage:\n${text}`;
-    const geminiResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-        encodeURIComponent(apiKey),
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: "application/json",
-            responseSchema,
-          },
-        }),
-      },
-    );
 
-    if (!geminiResponse.ok) {
-      const errorBody = await geminiResponse.text();
-      console.error("Gemini request failed", geminiResponse.status, errorBody);
+    const result = await callGemini(apiKey, prompt);
+
+    if (!result.ok || !result.data) {
       return jsonResponse({ error: "The analysis service could not respond." }, 502);
     }
 
-    const geminiBody = await geminiResponse.json();
-    const generatedText = geminiBody?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof generatedText !== "string") {
-      return jsonResponse({ error: "The analysis service returned an empty result." }, 502);
-    }
-
-    const parsed = JSON.parse(generatedText);
-    if (!isAnalysisResult(parsed)) {
-      return jsonResponse({ error: "The analysis service returned an invalid result." }, 502);
-    }
-
-    return jsonResponse({ ...parsed, sources: trustedSources });
+    return jsonResponse(result.data);
   } catch (error) {
     console.error("Claim analysis failed", error);
     return jsonResponse({ error: "We could not analyze that message. Please try again." }, 500);
