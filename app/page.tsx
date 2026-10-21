@@ -247,7 +247,7 @@ export default function TrustAIPage() {
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-wrap items-center gap-3">
                   <VerdictBadge verdict={result.verdict} />
-                  <p className="text-sm text-slate-500">AI assessment (mock)</p>
+                  <p className="text-sm text-slate-500">AI assessment (Gemini)</p>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-slate-700">{result.summary}</p>
               </div>
@@ -413,7 +413,7 @@ export default function TrustAIPage() {
           </div>
         </section>
         <footer className="pb-6 text-center text-xs text-slate-400">
-          TrustAI · Hackathon demo · Mock analysis only — always verify with official sources.
+          TrustAI · Hackathon demo · AI guidance only — always verify with official sources.
         </footer>
       </main>
     </div>

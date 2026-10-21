@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
 
     const prompt = `You are a careful misinformation-literacy assistant. Analyze the submitted message for credibility signals. Do not invent sources, claim that you browsed the web, or present your assessment as proof of factual truth. Use Supported only when the wording itself clearly aligns with a well-established fact; use Contradicted only for a clearly false claim; otherwise use Unverified. Keep the summary under 55 words. Return 2 to 5 concrete warning signs and 3 to 4 practical next steps.\n\nMessage:\n${text}`;
     const geminiResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
         encodeURIComponent(apiKey),
       {
         method: "POST",
@@ -112,7 +112,8 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!geminiResponse.ok) {
-      console.error("Gemini request failed", geminiResponse.status);
+      const errorBody = await geminiResponse.text();
+      console.error("Gemini request failed", geminiResponse.status, errorBody);
       return jsonResponse({ error: "The analysis service could not respond." }, 502);
     }
 
