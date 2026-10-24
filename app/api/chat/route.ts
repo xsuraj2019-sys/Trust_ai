@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';  import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const runtime = 'nodejs';
@@ -6,10 +6,7 @@ export const maxDuration = 60;
 
 interface Msg {
   role: 'user' | 'assistant';
-  text: string;
-}
-
-export async function POST(req: NextRequest) {
+  text: striCheckerexport async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'Server misconfigured.' }, { status: 500 });
