@@ -6,7 +6,9 @@ export const maxDuration = 60;
 
 interface Msg {
   role: 'user' | 'assistant';
-  text: striCheckerexport async function POST(req: NextRequest) {
+  text: string;
+}
+export async function POST(req: NextRequest) {}
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'Server misconfigured.' }, { status: 500 });
