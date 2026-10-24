@@ -1,5 +1,5 @@
 'use client';
-import { Menu } from 'lucide-react';
+import { Menu, ShieldCheck } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import type { Theme } from '@/lib/types';
 
@@ -26,7 +26,7 @@ export default function Navbar({
         </button>
         <button onClick={onLogoClick} className="flex items-center gap-2 font-bold text-app">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white shadow-lg">
-            T
+            <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
           </span>
           <span className="text-lg tracking-tight">TrustAI</span>
         </button>

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Loader2 } from 'lucide-react';
+import { MessageCircle, X, Send, Loader2, ShieldCheck } from 'lucide-react';
 import type { ChatMessage, UserProfile } from '@/lib/types';
 
 export default function Chatbot({
@@ -75,7 +75,9 @@ export default function Chatbot({
         <div className="fixed bottom-4 right-4 z-50 flex h-[540px] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl chat-window animate-fade-up">
           <div className="flex items-center justify-between border-b border-[var(--border-app)] px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white font-bold">T</span>
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white">
+                <ShieldCheck className="h-4 w-4" strokeWidth={2.5} />
+              </span>
               <div>
                 <p className="text-sm font-bold text-app">TrustAI</p>
                 <p className="text-[10px] text-muted">Your safety companion</p>

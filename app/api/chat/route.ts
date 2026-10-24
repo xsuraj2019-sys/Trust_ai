@@ -1,14 +1,17 @@
-export const dynamic = 'force-dynamic';  import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+const MODELS = ['gemini-flash-lite-latest', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
+
 interface Msg {
   role: 'user' | 'assistant';
   text: string;
 }
-export async function POST(req: NextRequest) {}
+
+export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'Server misconfigured.' }, { status: 500 });
@@ -36,13 +39,26 @@ ${convo ? `Conversation so far:\n${convo}\n` : ''}User: ${message}
 TrustAI:`;
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
-    });
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text().trim() || "I'm here! What would you like to check today?";
+    let reply = '';
+    let lastError: unknown = null;
+
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+        });
+        const result = await model.generateContent(prompt);
+        reply = result.response.text().trim();
+        if (reply) break;
+      } catch (e) {
+        console.error(`[chat] ${modelName} failed:`, e instanceof Error ? e.message : e);
+        lastError = e;
+      }
+    }
+
+    if (!reply) throw lastError ?? new Error('All models failed to respond.');
 
     return NextResponse.json({ reply });
   } catch (err: unknown) {

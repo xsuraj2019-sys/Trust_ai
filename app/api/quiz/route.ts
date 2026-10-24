@@ -1,9 +1,11 @@
-export const dynamic = 'force-dynamic'; import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { QuizQuestion } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const MODELS = ['gemini-flash-lite-latest', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 
 function safeParseArray(text: string): unknown[] {
   let cleaned = text.trim();
@@ -14,16 +16,12 @@ function safeParseArray(text: string): unknown[] {
   return JSON.parse(cleaned);
 }
 
-export async stringistringT(_req: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'Server misconfigured.' }, { status: 500 });
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.9 },
-    });
 
     const prompt = `Generate exactly 15 multiple-choice questions for a digital-literacy quiz for everyday internet users.
 Mix topics: WhatsApp/SMS scams, phishing emails, fake news, deepfakes, social media manipulation, password hygiene, URL safety, misinformation red flags, AI-generated content, online shopping scams.
@@ -45,8 +43,26 @@ Rules:
 - correctIndex must be a valid 0-based index.
 - Make them varied, realistic, and freshly worded. Avoid repetition.`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    let text = '';
+    let lastError: unknown = null;
+
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.9, maxOutputTokens: 8192 },
+        });
+        const result = await model.generateContent(prompt);
+        text = result.response.text();
+        if (text) break;
+      } catch (e) {
+        console.error(`[quiz] ${modelName} failed:`, e instanceof Error ? e.message : e);
+        lastError = e;
+      }
+    }
+
+    if (!text) throw lastError ?? new Error('All models failed to respond.');
+
     const raw = safeParseArray(text);
 
     if (!Array.isArray(raw) || raw.length < 5) {

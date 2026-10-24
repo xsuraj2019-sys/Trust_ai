@@ -1,11 +1,11 @@
-export const dynamic = 'force-dynamic'; import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AnalysisResult, Verdict } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const VERDICTS: Verdict[] = ['Fraud/Scam', 'Verified/Safe', 'Misleading', 'Satire', 'Unverified'];
+const MODELS = ['gemini-flash-lite-latest', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 
 const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, isNaN(n) ? 50 : n));
 
@@ -28,29 +28,8 @@ function normalizeVerdict(v: unknown): Verdict {
   return 'Unverified';
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Server misconfigured: GEMINI_API_KEY missing.' }, { status: 500 });
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const content: string = (body?.content ?? '').toString().trim();
-    if (!content) {
-      return NextResponse.json({ error: 'Content is required.' }, { status: 400 });
-    }
-    if (content.length > 8000) {
-      return NextResponse.json({ error: 'Content too long (max 8000 chars).' }, { status: 400 });
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
-    });
-
-    const prompt = `You are TrustAI, an expert misinformation & scam analyst. Analyze the user-provided message or URL and return a strict JSON object.
+function buildPrompt(content: string): string {
+  return `You are TrustAI, an expert misinformation & scam analyst. Analyze the user-provided message or URL and return a strict JSON object.
 USER CONTENT:
 """
 ${content}
@@ -77,9 +56,49 @@ Rules:
 - If uncertain => Unverified, medium trust.
 - Provide 2-4 credible sources with real URLs (fact-checkers, official gov, or major outlets).
 - "tactics" must list concrete manipulation tactics observed.`;
+}
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+export async function POST(req: NextRequest) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Server misconfigured: GEMINI_API_KEY missing.' }, { status: 500 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const content: string = (body?.content ?? '').toString().trim();
+    if (!content) {
+      return NextResponse.json({ error: 'Content is required.' }, { status: 400 });
+    }
+    if (content.length > 8000) {
+      return NextResponse.json({ error: 'Content too long (max 8000 chars).' }, { status: 400 });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const prompt = buildPrompt(content);
+
+    let text = '';
+    let lastError: unknown = null;
+
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 2048 },
+        });
+        const result = await model.generateContent(prompt);
+        text = result.response.text();
+        if (text) break;
+      } catch (e) {
+        console.error(`[verify] ${modelName} failed:`, e instanceof Error ? e.message : e);
+        lastError = e;
+      }
+    }
+
+    if (!text) {
+      throw lastError ?? new Error('All models failed to respond.');
+    }
+
     const parsed = safeParseJSON(text);
 
     const analysis: AnalysisResult = {

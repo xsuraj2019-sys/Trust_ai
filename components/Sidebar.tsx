@@ -1,5 +1,5 @@
 'use client';
-import { X, Home, History, GraduationCap, Info } from 'lucide-react';
+import { X, Home, History, GraduationCap, Info, ShieldCheck } from 'lucide-react';
 
 export type View = 'home' | 'verify' | 'quiz' | 'history' | 'about';
 
@@ -29,8 +29,8 @@ export default function Sidebar({
       >
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white font-bold">
-              T
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white shadow-lg">
+              <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
             </span>
             <span className="text-lg font-bold">TrustAI</span>
           </div>
