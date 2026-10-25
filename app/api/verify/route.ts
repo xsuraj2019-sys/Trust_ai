@@ -131,7 +131,28 @@ export async function POST(req: NextRequest) {
       analyzedAt: new Date().toISOString(),
     };
 
-    return NextResponse.json(analysis);
+    const response = NextResponse.json(analysis);
+    const memory = {
+      verdict: analysis.verdict,
+      summary: analysis.summary.slice(0, 1200),
+      originalClaim: analysis.originalClaim.slice(0, 2000),
+      senderInfo: analysis.senderInfo.slice(0, 500),
+      tactics: analysis.tactics.slice(0, 8),
+      detailedExplanation: analysis.detailedExplanation.slice(0, 1800),
+      trustScore: analysis.trustScore,
+      riskLevel: analysis.riskLevel,
+      sourceReliability: analysis.sourceReliability,
+      contentConsistency: analysis.contentConsistency,
+      analyzedAt: analysis.analyzedAt,
+    };
+    response.cookies.set('trustai_last_analysis', Buffer.from(JSON.stringify(memory)).toString('base64url'), {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    });
+    return response;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Analysis failed.';
     console.error('[verify] error:', err);
